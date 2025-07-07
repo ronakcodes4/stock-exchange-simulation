@@ -1,4 +1,6 @@
-package se450.assignment1;
+package se450.assignment1.price;
+
+import se450.assignment1.exceptions.InvalidPriceException;
 
 public class Price implements Comparable<Price> {
     private final int cents;
@@ -14,7 +16,7 @@ public class Price implements Comparable<Price> {
 
     @Override
     public int compareTo(Price other) {
-        if(other == null) {
+        if (other == null) {
             throw new NullPointerException("Cannot compare to null");
         }
         return Integer.compare(this.cents, other.cents);
@@ -26,14 +28,14 @@ public class Price implements Comparable<Price> {
     }
 
     public Price add(Price p) throws InvalidPriceException {
-        if(p == null) {
+        if (p == null) {
             throw new InvalidPriceException("Cannot add a null Price.");
         }
         return new Price(this.cents + p.cents);
     }
 
     public Price subtract(Price p) throws InvalidPriceException {
-        if(p == null) {
+        if (p == null) {
             throw new InvalidPriceException("Cannot add a null Price.");
         }
         return new Price(this.cents - p.cents);
@@ -44,7 +46,7 @@ public class Price implements Comparable<Price> {
     }
 
     public boolean greaterThan(Price p) throws InvalidPriceException {
-        if(p == null) {
+        if (p == null) {
             throw new InvalidPriceException("Cannot compare to null");
         }
         return this.cents > p.cents;
@@ -57,14 +59,14 @@ public class Price implements Comparable<Price> {
         return this.cents >= p.cents;
     }
 
-    public boolean lessThan (Price p) throws InvalidPriceException {
+    public boolean lessThan(Price p) throws InvalidPriceException {
         if (p == null) {
             throw new InvalidPriceException("Cannot compare to null");
         }
         return this.cents < p.cents;
     }
 
-    public boolean lessOrEqual (Price p) throws InvalidPriceException {
+    public boolean lessOrEqual(Price p) throws InvalidPriceException {
         if (p == null) {
             throw new InvalidPriceException("Cannot compare to null");
         }

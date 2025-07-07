@@ -1,17 +1,16 @@
 package se450.assignment2;
 
-//import se450.assignment1.Price;
-import se450.assignment1.PriceFactory;
-import se450.assignment3.book.BookSide;
+import se450.assignment1.price.PriceFactory;
 import se450.assignment2.book.ProductBook;
 import se450.assignment2.order.Order;
 import se450.assignment2.quote.Quote;
 import se450.assignment2.tradable.Tradable;
 import se450.assignment2.tradable.TradableDTO;
 
-import static se450.assignment3.book.BookSide.BUY;
-import static se450.assignment3.book.BookSide.SELL;
+import se450.assignment2.book.BookSide;
 
+import static se450.assignment2.book.BookSide.BUY;
+import static se450.assignment2.book.BookSide.SELL;
 
 public class Main {
 
@@ -194,7 +193,7 @@ public class Main {
         }
     }
 
-    /////////////////////////////////////////////////////////////////////////////////////
+    /// //////////////////////////////////////////////////////////////////////////////////
     private static void makeProductBook(String symbol) {
         try {
             productBook = new ProductBook(symbol);

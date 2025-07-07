@@ -1,19 +1,19 @@
 package se450.assignment3;
 
-// You will need to add your imports here for the various classes used here.
-import se450.assignment1.Price;
 import se450.assignment2.order.Order;
-import se450.assignment2.quote.Quote;
 import se450.assignment2.tradable.TradableDTO;
 import se450.assignment3.manager.ProductManager;
 import se450.assignment3.manager.UserManager;
-import se450.assignment3.price.PriceFactory;
-//import se450.assignment3.book.BookSide;
-import static se450.assignment3.book.BookSide.BUY;
-import static se450.assignment3.book.BookSide.SELL;
+import se450.assignment1.price.PriceFactory;
+
+import static se450.assignment2.book.BookSide.BUY;
+import static se450.assignment2.book.BookSide.SELL;
+import se450.assignment2.quote.Quote;
+import se450.assignment1.price.Price;
+
 
 public class Main {
-
+    
     public static void main(String[] args) {
 
         try {
@@ -221,4 +221,3 @@ public class Main {
     }
 
 }
-

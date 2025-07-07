@@ -2,26 +2,31 @@ package se450.assignment3.user;
 
 import se450.assignment2.tradable.TradableDTO;
 import se450.assignment3.exceptions.DataValidationException;
+import se450.assignment4.market.CurrentMarketObserver;
+import se450.assignment4.market.CurrentMarketSide;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Objects;
 
-public class User {
+
+public class User implements CurrentMarketObserver {
     private final String userId;
     private final HashMap<String, TradableDTO> tradables;
+    private final HashMap<String, CurrentMarketSide[]> currentMarkets;
 
     public User(String userId) throws DataValidationException {
         validateUserId(userId);
         this.userId = userId.toUpperCase();
         this.tradables = new HashMap<>();
+        this.currentMarkets = new HashMap<>();
     }
 
     private void validateUserId(String id) throws DataValidationException {
-        if (id == null || !id.matches("[a-zA-Z]{3}")) {
+        if (id == null || !id.matches("^[a-zA-Z]{3}$")) {
             throw new DataValidationException("User ID must be 3 letters. Received: " + id);
         }
     }
@@ -34,39 +39,67 @@ public class User {
         if (dto == null) {
             return;
         }
-        tradables.put(dto.getID(), dto);
+        this.tradables.put(dto.tradableId(), dto);
     }
 
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append("User Id: ").append(userId).append("\n");
+        sb.append("User Id: ").append(this.userId).append("\n");
 
-        ArrayList<TradableDTO> sortedTradables = new ArrayList<>(tradables.values());
-        // Sort by Product (ASCII), then Price (descending), then ID (ASCII)
-        Collections.sort(sortedTradables, Comparator
-                .comparing(TradableDTO::getProduct)
-                .thenComparing(TradableDTO::getPrice, Comparator.reverseOrder())
-                .thenComparing(TradableDTO::getID));
+        if (!tradables.isEmpty()) {
+            List<TradableDTO> sortedTradables = new ArrayList<>(tradables.values());
+            Collections.sort(sortedTradables, Comparator
+                    .comparing(TradableDTO::product)
+                    .thenComparing(TradableDTO::price, Comparator.reverseOrder())
+                    .thenComparing(TradableDTO::tradableId));
 
-        for (TradableDTO dto : sortedTradables) {
-            sb.append("\tProduct: ").append(dto.getProduct())
-                    .append(", Price: ").append(dto.getPrice().toString())
-                    // Expected output uses 2 spaces for padding, or rather, numbers are right-aligned in a field of 2 or 3.
-                    // Let's try to match the " Vol: 88" vs " Vol:  8" style.
-                    // Using String.format("%2d", ...) might be too tight if volumes go to 3 digits.
-                    // The expected output seems to have variable spacing to align columns, which is hard with simple String.format.
-                    // For now, let's use a consistent padding that looks reasonable.
-                    // The expected output has "OriginalVolume: 88", "RemainingVolume: 0", etc.
-                    .append(", OriginalVolume: ").append(String.format("%-3d", dto.getOriginalVolume()).replace(' ', ' ')) // Left align in 3 chars
-                    .append(", RemainingVolume: ").append(String.format("%-3d",dto.getRemainingVolume()).replace(' ', ' '))
-                    .append(", CancelledVolume: ").append(String.format("%-3d",dto.getCancelledVolume()).replace(' ', ' '))
-                    .append(", FilledVolume: ").append(String.format("%-3d",dto.getFilledVolume()).replace(' ', ' '))
-                    .append(", User: ").append(dto.getUser())
-                    .append(", Side: ").append(dto.getSide().toString())
-                    .append(", Id: ").append(dto.getID()).append("\n");
+            for (TradableDTO dto : sortedTradables) {
+                sb.append("\tProduct: ").append(dto.product())
+                        .append(", Price: ").append(dto.price().toString())
+                        .append(", OriginalVolume: ").append(dto.originalVolume())
+                        .append(", RemainingVolume: ").append(dto.remainingVolume())
+                        .append(", CancelledVolume: ").append(dto.cancelledVolume())
+                        .append(", FilledVolume: ").append(dto.filledVolume())
+                        .append(", User: ").append(dto.user())
+                        .append(", Side: ").append(dto.side().toString())
+
+                        .append(", Id: ").append(dto.tradableId()).append("\n");
+            }
         }
-        return sb.toString();
+        return sb.toString().trim();
+    }
+
+    @Override
+    public void updateCurrentMarket(String symbol, CurrentMarketSide buySide, CurrentMarketSide sellSide) {
+        if (symbol == null) {
+            return;
+        }
+        CurrentMarketSide[] marketSides = {buySide, sellSide};
+        this.currentMarkets.put(symbol, marketSides);
+    }
+
+    public String getCurrentMarkets() {
+        if (currentMarkets.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+
+
+        List<String> sortedSymbols = new ArrayList<>(currentMarkets.keySet());
+        Collections.sort(sortedSymbols);
+
+        for (String symbol : sortedSymbols) {
+            CurrentMarketSide[] sides = currentMarkets.get(symbol);
+            CurrentMarketSide buySide = sides[0];
+            CurrentMarketSide sellSide = sides[1];
+
+            String buySideStr = (buySide != null && buySide.getPrice() != null) ? buySide.toString() : "$0.00x0";
+            String sellSideStr = (sellSide != null && sellSide.getPrice() != null) ? sellSide.toString() : "$0.00x0";
+
+            sb.append(String.format("%s   %s - %s%n", symbol, buySideStr, sellSideStr));
+        }
+        return sb.toString().trim();
     }
 
     @Override

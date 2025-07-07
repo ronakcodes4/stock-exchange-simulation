@@ -1,5 +1,8 @@
 package se450.assignment1;
 
+import se450.assignment1.price.Price;
+import se450.assignment1.price.PriceFactory;
+
 public class Main {
 
     public static void main(String[] args) {

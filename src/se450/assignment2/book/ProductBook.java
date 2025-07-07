@@ -1,169 +1,177 @@
-package se450.assignment2.book; // This is your A2 package
+package se450.assignment2.book;
 
-import se450.assignment1.Price;
-import se450.assignment1.InvalidPriceException; // For throws clause
+import se450.assignment1.price.Price;
+import se450.assignment1.exceptions.InvalidPriceException;
 import se450.assignment2.exception.InvalidOrderException;
+import se450.assignment2.exception.InvalidQuoteException;
 import se450.assignment2.quote.Quote;
 import se450.assignment2.tradable.Tradable;
 import se450.assignment2.tradable.TradableDTO;
-import se450.assignment3.book.BookSide; // KEY CHANGE: Use A3 BookSide enum
+import se450.assignment3.exceptions.DataValidationException;
+import se450.assignment4.market.CurrentMarketTracker;
 
 import java.util.ArrayList;
 import java.util.List;
-//import java.util.Map;
 
 public class ProductBook {
     private final String product;
-    private final ProductBookSide buySide;  // This is se450.assignment2.book.ProductBookSide
-    private final ProductBookSide sellSide; // This is se450.assignment2.book.ProductBookSide
+    private final ProductBookSide buySide;
+    private final ProductBookSide sellSide;
 
-    public ProductBook(String productSymbol) throws IllegalArgumentException { // Matched A2 constructor
-        if (productSymbol == null || productSymbol.trim().isEmpty()) { // Basic validation
-            throw new IllegalArgumentException("Product symbol cannot be null or empty for ProductBook");
-        }
-        // A2 PDF: "must be 1 to 5 letters/numbers, they can also have a period"
-        if (!productSymbol.matches("^[A-Za-z0-9.]{1,5}$")) {
-            throw new IllegalArgumentException("Invalid product symbol format for ProductBook: " + productSymbol);
+    public ProductBook(String productSymbol) throws DataValidationException {
+        if (productSymbol == null || !productSymbol.matches("^[A-Za-z0-9.]{1,5}$")) {
+            throw new DataValidationException("Product symbol must be 1-5 letters/numbers or '.' for ProductBook: " + productSymbol);
         }
         this.product = productSymbol;
-        // ProductBookSide constructor now expects se450.assignment3.book.BookSide
-        this.buySide = new ProductBookSide(BookSide.BUY, this.product);
-        this.sellSide = new ProductBookSide(BookSide.SELL, this.product);
+
+        this.buySide = new ProductBookSide(this.product, BookSide.BUY);
+        this.sellSide = new ProductBookSide(this.product, BookSide.SELL);
     }
 
-    public String getProduct() { // Added for completeness, though not in A2 PDF for ProductBook
+    public String getProduct() {
         return product;
     }
 
-    public TradableDTO add(Tradable t) throws InvalidOrderException { // A2 PDF has this method signature
-        if (t == null) {
-            throw new IllegalArgumentException("Tradable cannot be null for ProductBook.add");
-        }
-        System.out.println("**ADD: " + t); // A2 PDF: "First print a message..."
 
-        // t.getSide() will return se450.assignment3.book.BookSide
+    public TradableDTO add(Tradable t) throws DataValidationException {
+        if (t == null) {
+            throw new DataValidationException("Cannot add null Tradable to ProductBook.");
+        }
+
         ProductBookSide sideToAddTo = (t.getSide() == BookSide.BUY) ? buySide : sellSide;
-        TradableDTO dto = sideToAddTo.add(t); // This add is ProductBookSide.add(Tradable)
+        TradableDTO dto = sideToAddTo.add(t);
 
         try {
             tryTrade();
         } catch (InvalidPriceException e) {
-            // Handle or propagate. For A2, maybe wrap or log.
-            System.err.println("Warning: InvalidPriceException during tryTrade in A2 ProductBook: " + e.getMessage());
+            System.err.println("Error during tryTrade after adding tradable " + (t.getId() != null ? t.getId() : "null") + ": " + e.getMessage());
         }
+        updateMarket();
         return dto;
     }
 
-    public TradableDTO[] add(Quote q) throws InvalidOrderException { // A2 PDF signature
+
+    public TradableDTO[] add(Quote q) throws DataValidationException, InvalidOrderException, InvalidQuoteException {
         if (q == null) {
-            throw new IllegalArgumentException("Quote cannot be null for ProductBook.add");
+            throw new DataValidationException("Cannot add null Quote to ProductBook.");
         }
-        // A2 PDF: "First, call removeQuotesForUser"
-        // removeQuotesForUser in A2 ProductBookSide returns a single DTO or null.
-        // We need to call it on both sides.
-        TradableDTO removedBuy = buySide.removeQuotesForUser(q.getUser()); // or q.getUserName()
-        TradableDTO removedSell = sellSide.removeQuotesForUser(q.getUser());
-        // The A2 PDF is a bit inconsistent here on what removeQuotesForUser returns and how it's used.
 
-        // A2 PDF: "Call the "add" method of the BUY ProductBookSide...save the TradableDTO"
-        // This should be ProductBookSide.add(Tradable), not ProductBook.add(Tradable) to avoid recursive tryTrade.
-        TradableDTO buySideDTO = buySide.add(q.getBuySide()); // Assuming Quote.getBuySide() returns Tradable (QuoteSide)
-        TradableDTO sellSideDTO = sellSide.add(q.getSellSide());
 
-        try {
-            tryTrade();
-        } catch (InvalidPriceException e) {
-            System.err.println("Warning: InvalidPriceException during tryTrade in A2 ProductBook: " + e.getMessage());
-        }
+        this.removeQuotesForUser(q.getUser());
+
+
+        TradableDTO buySideDTO = this.add(q.getBuySide());
+        TradableDTO sellSideDTO = this.add(q.getSellSide());
+
+        updateMarket();
+
+
         return new TradableDTO[]{buySideDTO, sellSideDTO};
     }
 
-    public TradableDTO cancel(BookSide side, String orderId) throws InvalidOrderException { // Parameter uses A3 BookSide
+
+    public TradableDTO cancel(BookSide side, String orderId) throws DataValidationException {
         if (side == null || orderId == null || orderId.trim().isEmpty()) {
-            throw new IllegalArgumentException("Side and Order ID must be provided for cancel.");
+            throw new DataValidationException("Side and Order ID must be valid for cancel operation.");
         }
         ProductBookSide sideToCancelFrom = (side == BookSide.BUY) ? buySide : sellSide;
-        return sideToCancelFrom.cancel(orderId); // This calls A2 ProductBookSide.cancel
+        TradableDTO cancelledDTO = sideToCancelFrom.cancel(orderId);
+
+        updateMarket();
+        return cancelledDTO;
     }
 
-    public TradableDTO[] removeQuotesForUser(String userName) throws InvalidOrderException {
+
+    public TradableDTO[] removeQuotesForUser(String userName) throws DataValidationException {
         if (userName == null || userName.trim().isEmpty()) {
-            throw new IllegalArgumentException("Username must be provided for removeQuotesForUser.");
+            throw new DataValidationException("Username must be provided for removeQuotesForUser.");
         }
-        // A2 ProductBookSide.removeQuotesForUser returns a single DTO.
-        TradableDTO buyCancelled = buySide.removeQuotesForUser(userName);
-        TradableDTO sellCancelled = sellSide.removeQuotesForUser(userName);
 
-        List<TradableDTO> cancelledList = new ArrayList<>();
-        if (buyCancelled != null) cancelledList.add(buyCancelled);
-        if (sellCancelled != null) cancelledList.add(sellCancelled);
+        ArrayList<TradableDTO> buyCancelled = buySide.removeQuotesForUser(userName);
+        ArrayList<TradableDTO> sellCancelled = sellSide.removeQuotesForUser(userName);
 
-        return cancelledList.toArray(new TradableDTO[0]);
+        List<TradableDTO> allCancelled = new ArrayList<>();
+        if (buyCancelled != null) allCancelled.addAll(buyCancelled);
+        if (sellCancelled != null) allCancelled.addAll(sellCancelled);
+
+        TradableDTO[] result = allCancelled.toArray(new TradableDTO[0]);
+        updateMarket();
+        return result;
     }
 
-    public void tryTrade() throws InvalidPriceException { // Add throws for Price comparison methods
+    private void tryTrade() throws InvalidPriceException, DataValidationException {
         while (true) {
             Price topBuyPrice = buySide.topOfBookPrice();
             Price topSellPrice = sellSide.topOfBookPrice();
 
-            if (topBuyPrice == null || topSellPrice == null) break;
-
-            // A2 PDF Appendix A: "Top BUY or SELL price is null?" -> return
-            // "Top SELL > top BUY?" (means no cross) -> return
-            // This implies if topBuyPrice < topSellPrice, no trade.
-            if (topBuyPrice.lessThan(topSellPrice)) { // throws InvalidPriceException
+            if (topBuyPrice == null || topSellPrice == null || topBuyPrice.lessThan(topSellPrice)) {
                 break;
             }
 
-            // Books are crossed or touching: topBuyPrice >= topSellPrice
-            // A2 PDF Appendix A: "Calculate the 'toTrade' amount as the min of the BUY & SELL top of book volumes."
             int buyVolumeAtTop = buySide.topOfBookVolume();
             int sellVolumeAtTop = sellSide.topOfBookVolume();
             int volumeToTrade = Math.min(buyVolumeAtTop, sellVolumeAtTop);
 
-            if (volumeToTrade == 0) break;
+            if (volumeToTrade <= 0) break;
 
-            // A2 PDF Appendix A: "Call the 'tradeOut' method of the SELL product book side,
-            // passing the top of BUY book price and the toTrade volume."
-            // AND "Call the 'tradeOut' method of the BUY product book side,
-            // passing the top of BUY book price and the toTrade volume."
-            // This is a specific (and somewhat unusual) rule from the PDF.
-            // It means both sides try to trade out their volume AT THE BEST BID PRICE.
-            Price tradeExecutionPrice = topBuyPrice;
+            Price executionPrice = topBuyPrice;
 
-            List<TradableDTO> sellFills = sellSide.tradeOut(tradeExecutionPrice, volumeToTrade);
-            List<TradableDTO> buyFills = buySide.tradeOut(tradeExecutionPrice, volumeToTrade);
 
-            // Print fill messages as per A2 Main output style
-            for (TradableDTO bdto : buyFills) {
-                String fillType = (bdto.getRemainingVolume() == 0) ? "FULL FILL" : "PARTIAL FILL";
-                // A2 output: "FULL FILL: (BUY 50) DEM BUY order: TGT at $134.00, Orig Vol: 50, Rem Vol: 0, Fill Vol: 50, CXL Vol: 0, ID: ..."
-                // The (BUY XX) part is the volume filled FOR THAT DTO.
-                // The DTO's getFilledVolume() is cumulative.
-                // The A2 Main output's (BUY XX) seems to be the total filled volume for that order.
-                System.out.println("\t" + fillType + ": (BUY " + String.format("%2d", bdto.getFilledVolume()) + ") " + bdto.toString());
+            List<TradableDTO> sellFills = sellSide.tradeOut(executionPrice, volumeToTrade);
+            List<TradableDTO> buyFills = buySide.tradeOut(executionPrice, volumeToTrade);
+
+            for (TradableDTO dto : buyFills) {
+                String fillType = (dto.remainingVolume() == 0) ? "FULL FILL" : "PARTIAL FILL";
+                System.out.printf("\t%s: (BUY %d) %s %s %s for %s: Price: %s, Orig Vol: %d, Rem Vol: %d, Fill Vol: %d, Cxl'd Vol: %d, ID: %s%n",
+                        fillType, dto.originalVolume() - dto.remainingVolume() - dto.cancelledVolume(),
+                        dto.user(),
+                        dto.side().toString(), (dto.isQuote() ? "side quote" : "side order"), dto.product(),
+                        dto.price().toString(), dto.originalVolume(), dto.remainingVolume(),
+                        dto.filledVolume(), dto.cancelledVolume(), dto.tradableId());
             }
-            for (TradableDTO sdto : sellFills) {
-                String fillType = (sdto.getRemainingVolume() == 0) ? "FULL FILL" : "PARTIAL FILL";
-                System.out.println("\t" + fillType + ": (SELL " + String.format("%2d", sdto.getFilledVolume()) + ") " + sdto.toString());
+            for (TradableDTO dto : sellFills) {
+                String fillType = (dto.remainingVolume() == 0) ? "FULL FILL" : "PARTIAL FILL";
+                System.out.printf("\t%s: (SELL %d) %s %s %s for %s: Price: %s, Orig Vol: %d, Rem Vol: %d, Fill Vol: %d, Cxl'd Vol: %d, ID: %s%n",
+                        fillType, dto.originalVolume() - dto.remainingVolume() - dto.cancelledVolume(),
+                        dto.user(),
+                        dto.side().toString(), (dto.isQuote() ? "side quote" : "side order"), dto.product(),
+                        dto.price().toString(), dto.originalVolume(), dto.remainingVolume(),
+                        dto.filledVolume(), dto.cancelledVolume(), dto.tradableId());
             }
 
             if (buyFills.isEmpty() && sellFills.isEmpty() && volumeToTrade > 0) {
-                // If volumeToTrade was > 0 but no fills happened (e.g., tradeOut logic didn't match any)
+                System.err.println("tryTrade Warning: No fills occurred despite cross for " + product +
+                        " with tradeable volume " + volumeToTrade +
+                        " at BUY price " + (topBuyPrice != null ? topBuyPrice.toString() : "N/A") +
+                        " and SELL price " + (topSellPrice != null ? topSellPrice.toString() : "N/A") +
+                        ". Execution Price: " + (executionPrice != null ? executionPrice.toString() : "N/A") +
+                        ". Breaking trade loop.");
                 break;
             }
         }
     }
 
-    public String getTopOfBookString(BookSide side) { // Parameter uses A3 BookSide
+
+    public String getTopOfBookString(BookSide side) {
         if (side == null) {
-            throw new IllegalArgumentException("Side cannot be null for getTopOfBookString.");
+
+            return "Invalid Side x 0";
         }
-        Price p = (side == BookSide.BUY) ? buySide.topOfBookPrice() : sellSide.topOfBookPrice();
-        int vol = (side == BookSide.BUY) ? buySide.topOfBookVolume() : sellSide.topOfBookVolume();
-        String priceStr = (p == null) ? "$0.00" : p.toString();
-        // A2 output: "Top of BUY book: Top of BUY book: $133.95 x 80"
-        return String.format("Top of %s book: %s x %d", side.toString(), priceStr, vol);
+        ProductBookSide currentPBSide = (side == BookSide.BUY) ? buySide : sellSide;
+        Price topPrice = currentPBSide.topOfBookPrice();
+        int topVolume = currentPBSide.topOfBookVolume();
+        String priceString = (topPrice == null) ? "$0.00" : topPrice.toString();
+        return String.format("%s x %d", priceString, topVolume);
+    }
+
+
+    private void updateMarket() {
+        Price buyPrice = buySide.topOfBookPrice();
+        int buyVolume = buySide.topOfBookVolume();
+        Price sellPrice = sellSide.topOfBookPrice();
+        int sellVolume = sellSide.topOfBookVolume();
+
+        CurrentMarketTracker.getInstance().updateMarket(this.product, buyPrice, buyVolume, sellPrice, sellVolume);
     }
 
     @Override
@@ -171,9 +179,8 @@ public class ProductBook {
         StringBuilder sb = new StringBuilder();
         sb.append("--------------------------------------------\n");
         sb.append("Product Book: ").append(product).append("\n");
-        // ProductBookSide.toString() from A2 handles its own formatting including "Side: BUY/SELL"
-        sb.append(buySide.toString()); // Calls A2 ProductBookSide.toString()
-        sb.append(sellSide.toString());// Calls A2 ProductBookSide.toString()
+        sb.append(buySide.toString());
+        sb.append(sellSide.toString());
         sb.append("--------------------------------------------");
         return sb.toString();
     }

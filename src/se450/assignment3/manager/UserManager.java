@@ -3,18 +3,21 @@ package se450.assignment3.manager;
 import se450.assignment3.user.User;
 import se450.assignment2.tradable.TradableDTO;
 import se450.assignment3.exceptions.DataValidationException;
+import se450.assignment4.exceptions.UserNotFoundException;
 
 import java.util.ArrayList;
-import java.util.Map;
 import java.util.TreeMap;
 
 public class UserManager {
     private static volatile UserManager instance;
+
     private final TreeMap<String, User> users;
+
 
     private UserManager() {
         this.users = new TreeMap<>();
     }
+
 
     public static UserManager getInstance() {
         if (instance == null) {
@@ -32,18 +35,17 @@ public class UserManager {
             throw new DataValidationException("Input user ID array cannot be null for UserManager.init.");
         }
         for (String userId : userIdsIn) {
-            if (userId == null || userId.trim().isEmpty()){
+            if (userId == null || userId.trim().isEmpty()) {
                 throw new DataValidationException("User ID in array cannot be null or empty.");
             }
             String upperUserId = userId.toUpperCase();
-            if (users.containsKey(upperUserId)) {
-                // System.out.println("User " + upperUserId + " already initialized. Skipping."); // Per A3 output, no such message
-                continue;
+            if (!users.containsKey(upperUserId)) {
+                User newUser = new User(userId);
+                users.put(newUser.getUserId(), newUser);
             }
-            User newUser = new User(userId);
-            users.put(newUser.getUserId(), newUser);
         }
     }
+
 
     public void updateTradable(String userId, TradableDTO dto) throws DataValidationException {
         if (userId == null) {
@@ -52,25 +54,39 @@ public class UserManager {
         if (dto == null) {
             throw new DataValidationException("TradableDTO cannot be null for updating.");
         }
-        User user = users.get(userId.toUpperCase());
+
+        String upperUserId = userId.toUpperCase();
+        User user = users.get(upperUserId);
         if (user == null) {
-            throw new DataValidationException("User " + userId.toUpperCase() + " does not exist in UserManager.");
+            throw new DataValidationException("User " + upperUserId + " does not exist in UserManager.");
         }
         user.updateTradable(dto);
     }
 
+    public User getUser(String userId) throws UserNotFoundException {
+        if (userId == null || userId.trim().isEmpty()) {
+            throw new UserNotFoundException("User ID cannot be null or empty.");
+        }
+        User user = users.get(userId.toUpperCase()); // Assuming users are stored with uppercase IDs
+        if (user == null) {
+            throw new UserNotFoundException("User not found: " + userId);
+        }
+        return user;
+    }
+
+
     @Override
     public String toString() {
-        StringBuilder finalSb = new StringBuilder();
-        ArrayList<User> userList = new ArrayList<>(users.values()); // Ensures consistent iteration order from TreeMap
+        StringBuilder sb = new StringBuilder();
+
+        ArrayList<User> userList = new ArrayList<>(users.values());
+
         for (int i = 0; i < userList.size(); i++) {
-            finalSb.append(userList.get(i).toString()); // User.toString() ends with one \n
-            if (i < userList.size() - 1) { // If not the last user, add the extra newline for spacing
-                finalSb.append("\n");
+            sb.append(userList.get(i).toString());
+            if (i < userList.size() - 1) {
+                sb.append("\n");
             }
         }
-        // If the list is empty, an empty string is fine.
-        // If the list is not empty, User.toString() provides the final newline for the last user.
-        return finalSb.toString();
+        return sb.toString();
     }
 }
